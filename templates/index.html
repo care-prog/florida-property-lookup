@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Florida Property Lookup</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #0f172a; color: #e2e8f0; min-height: 100vh;
+        }
+        .container { max-width: 900px; margin: 0 auto; padding: 40px 20px; }
+        h1 { text-align: center; font-size: 2rem; margin-bottom: 8px; color: #f1f5f9; }
+        .subtitle { text-align: center; color: #94a3b8; margin-bottom: 8px; }
+        .badge { text-align: center; margin-bottom: 32px; color: #22c55e; font-size: 0.85rem; font-weight: 600; }
+        .search-box { display: flex; gap: 12px; margin-bottom: 32px; }
+        .search-box input {
+            flex: 1; padding: 14px 18px; font-size: 16px;
+            border: 2px solid #334155; border-radius: 10px;
+            background: #1e293b; color: #f1f5f9; outline: none;
+        }
+        .search-box input:focus { border-color: #3b82f6; }
+        .search-box input::placeholder { color: #64748b; }
+        .search-box button {
+            padding: 14px 28px; font-size: 16px; font-weight: 600;
+            background: #3b82f6; color: white; border: none;
+            border-radius: 10px; cursor: pointer; white-space: nowrap;
+        }
+        .search-box button:hover { background: #2563eb; }
+        .search-box button:disabled { background: #475569; cursor: not-allowed; }
+        .loading { text-align: center; padding: 40px; color: #94a3b8; display: none; }
+        .loading.active { display: block; }
+        .spinner {
+            display: inline-block; width: 32px; height: 32px;
+            border: 3px solid #334155; border-top-color: #3b82f6;
+            border-radius: 50%; animation: spin 0.8s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .error { background: #451a2e; border: 1px solid #be123c; color: #fda4af; padding: 16px; border-radius: 10px; text-align: center; display: none; }
+        .error.active { display: block; }
+        .results { display: none; }
+        .results.active { display: block; }
+        .matched { color: #94a3b8; font-size: 0.9rem; margin-bottom: 16px; text-align: center; }
+        .card { background: #1e293b; border: 1px solid #334155; border-radius: 12px; padding: 24px; margin-bottom: 16px; }
+        .card-title { font-size: 1.1rem; font-weight: 600; color: #3b82f6; margin-bottom: 16px; padding-bottom: 8px; border-bottom: 1px solid #334155; }
+        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+        .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
+        @media (max-width: 600px) {
+            .grid, .grid-3 { grid-template-columns: 1fr; }
+            .search-box { flex-direction: column; }
+        }
+        .field { display: flex; flex-direction: column; gap: 2px; }
+        .field-label { font-size: 0.75rem; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px; }
+        .field-value { font-size: 1rem; color: #f1f5f9; }
+        .highlight { font-size: 1.15rem; color: #fbbf24; font-weight: 600; }
+        .green { color: #22c55e; font-weight: 600; }
+        .red { color: #f87171; font-weight: 600; }
+        .tag {
+            display: inline-block; padding: 2px 10px; border-radius: 6px;
+            font-size: 0.8rem; font-weight: 600;
+        }
+        .tag-green { background: #14532d; color: #4ade80; }
+        .tag-gray { background: #334155; color: #94a3b8; }
+        .full-width { grid-column: 1 / -1; }
+        .note-box {
+            background: #1a1a2e; border: 1px solid #334155; color: #94a3b8;
+            padding: 12px 16px; border-radius: 8px; margin-top: 16px; font-size: 0.85rem;
+            line-height: 1.5;
+        }
+        .note-box strong { color: #cbd5e1; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Florida Property Lookup</h1>
+        <p class="subtitle">Find property owner, value, tax & sale info by address</p>
+        <p class="badge">100% FREE - All 67 Florida Counties - No API Key</p>
+
+        <div class="search-box">
+            <input type="text" id="address" placeholder="e.g., 1425 SW 22nd St, Miami, FL 33145" autofocus>
+            <button id="searchBtn" onclick="search()">Search</button>
+        </div>
+
+        <div class="loading" id="loading">
+            <div class="spinner"></div>
+            <p style="margin-top: 12px;">Searching Florida property records...</p>
+        </div>
+
+        <div class="error" id="error"></div>
+
+        <div class="results" id="results">
+            <p class="matched" id="matched"></p>
+            <div id="cards"></div>
+        </div>
+    </div>
+
+    <script>
+        const input = document.getElementById('address');
+        input.addEventListener('keydown', e => { if (e.key === 'Enter') search(); });
+
+        async function search() {
+            const address = input.value.trim();
+            if (!address) return;
+            const btn = document.getElementById('searchBtn');
+            const loading = document.getElementById('loading');
+            const error = document.getElementById('error');
+            const results = document.getElementById('results');
+            btn.disabled = true;
+            loading.classList.add('active');
+            error.classList.remove('active');
+            results.classList.remove('active');
+            try {
+                const res = await fetch('/search', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ address })
+                });
+                const data = await res.json();
+                if (data.error) { error.textContent = data.error; error.classList.add('active'); return; }
+                renderResults(data);
+                results.classList.add('active');
+            } catch (err) {
+                error.textContent = 'Connection error. Please try again.';
+                error.classList.add('active');
+            } finally { btn.disabled = false; loading.classList.remove('active'); }
+        }
+
+        function f(v) { return (!v || v === 'N/A' || v === '') ? 'N/A' : v; }
+        function money(v) { return (!v || v === 'N/A') ? 'N/A' : '$' + Number(v).toLocaleString(); }
+        function num(v) { return (!v || v === 'N/A') ? 'N/A' : Number(v).toLocaleString(); }
+        function yr(v) { return (!v || v === 'N/A') ? 'N/A' : String(Math.round(Number(v))); }
+
+        function renderResults(data) {
+            document.getElementById('matched').textContent = 'Matched: ' + (data.matched_address || '');
+            const container = document.getElementById('cards');
+            container.innerHTML = '';
+
+            for (const r of data.results) {
+                const hmstd = r.homestead
+                    ? '<span class="tag tag-green">HOMESTEAD</span>'
+                    : '<span class="tag tag-gray">NO HOMESTEAD</span>';
+
+                container.innerHTML += `
+                <!-- OWNER -->
+                <div class="card">
+                    <div class="card-title">Owner Information</div>
+                    <div class="grid">
+                        <div class="field">
+                            <span class="field-label">Owner Name</span>
+                            <span class="field-value highlight">${f(r.owner_name)}</span>
+                        </div>
+                        <div class="field">
+                            <span class="field-label">Homestead Exemption</span>
+                            <span class="field-value">${hmstd}</span>
+                        </div>
+                        <div class="field full-width">
+                            <span class="field-label">Owner Mailing Address (Tax Bills Sent Here)</span>
+                            <span class="field-value green">${f(r.owner_mailing)}</span>
+                        </div>
+                        ${r.fiduciary_name !== 'N/A' ? `
+                        <div class="field">
+                            <span class="field-label">Fiduciary / Trustee</span>
+                            <span class="field-value">${r.fiduciary_name}</span>
+                        </div>
+                        <div class="field">
+                            <span class="field-label">Fiduciary Address</span>
+                            <span class="field-value">${f(r.fiduciary_mailing)}</span>
+                        </div>` : ''}
+                    </div>
+                </div>
+
+                <!-- PROPERTY -->
+                <div class="card">
+                    <div class="card-title">Property Details</div>
+                    <div class="grid">
+                        <div class="field">
+                            <span class="field-label">Property Address</span>
+                            <span class="field-value">${f(r.address)}</span>
+                        </div>
+                        <div class="field">
+                            <span class="field-label">Parcel ID</span>
+                            <span class="field-value">${f(r.parcel_id)}</span>
+                        </div>
+                        <div class="field">
+                            <span class="field-label">Property Type</span>
+                            <span class="field-value">${f(r.land_use)}</span>
+                        </div>
+                        <div class="field">
+                            <span class="field-label">Land Use Code</span>
+                            <span class="field-value">${f(r.land_use_code)}</span>
+                        </div>
+                        <div class="field">
+                            <span class="field-label">Year Built</span>
+                            <span class="field-value">${yr(r.year_built)}</span>
+                        </div>
+                        <div class="field">
+                            <span class="field-label">Effective Year</span>
+                            <span class="field-value">${yr(r.eff_year_built)}</span>
+                        </div>
+                        <div class="field">
+                            <span class="field-label">Living Area (sqft)</span>
+                            <span class="field-value">${num(r.living_area)}</span>
+                        </div>
+                        <div class="field">
+                            <span class="field-label">Lot Size (sqft)</span>
+                            <span class="field-value">${num(r.lot_size)}</span>
+                        </div>
+                        <div class="field">
+                            <span class="field-label">Buildings</span>
+                            <span class="field-value">${f(r.buildings)}</span>
+                        </div>
+                        <div class="field">
+                            <span class="field-label">Residential Units</span>
+                            <span class="field-value">${f(r.units)}</span>
+                        </div>
+                        <div class="field">
+                            <span class="field-label">Construction Class</span>
+                            <span class="field-value">${f(r.construction_class)}</span>
+                        </div>
+                        <div class="field">
+                            <span class="field-label">Quality</span>
+                            <span class="field-value">${f(r.quality)}</span>
+                        </div>
+                        ${r.legal_desc !== 'N/A' ? `
+                        <div class="field full-width">
+                            <span class="field-label">Legal Description</span>
+                            <span class="field-value" style="font-size:0.85rem;">${r.legal_desc}</span>
+                        </div>` : ''}
+                    </div>
+                </div>
+
+                <!-- VALUATION -->
+                <div class="card">
+                    <div class="card-title">Valuation & Tax Assessment</div>
+                    <div class="grid-3">
+                        <div class="field">
+                            <span class="field-label">Just (Market) Value</span>
+                            <span class="field-value highlight">${money(r.just_value)}</span>
+                        </div>
+                        <div class="field">
+                            <span class="field-label">Assessed Value</span>
+                            <span class="field-value green">${money(r.assessed_value)}</span>
+                        </div>
+                        <div class="field">
+                            <span class="field-label">Taxable Value</span>
+                            <span class="field-value green">${money(r.taxable_value)}</span>
+                        </div>
+                        <div class="field">
+                            <span class="field-label">Land Value</span>
+                            <span class="field-value">${money(r.land_value)}</span>
+                        </div>
+                        <div class="field">
+                            <span class="field-label">Homestead Value</span>
+                            <span class="field-value">${money(r.homestead_value)}</span>
+                        </div>
+                        <div class="field">
+                            <span class="field-label">Special Features</span>
+                            <span class="field-value">${money(r.special_features_value)}</span>
+                        </div>
+                    </div>
+                    <div class="grid" style="margin-top:12px;">
+                        <div class="field">
+                            <span class="field-label">Tax Authority Code</span>
+                            <span class="field-value">${f(r.tax_authority)}</span>
+                        </div>
+                        <div class="field">
+                            <span class="field-label">Neighborhood Code</span>
+                            <span class="field-value">${f(r.neighborhood)}</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- SALES -->
+                <div class="card">
+                    <div class="card-title">Sale History</div>
+                    <div class="grid">
+                        <div class="field">
+                            <span class="field-label">Last Sale Price</span>
+                            <span class="field-value highlight">${money(r.sale1_price)}</span>
+                        </div>
+                        <div class="field">
+                            <span class="field-label">Last Sale Date</span>
+                            <span class="field-value">${f(r.sale1_date)}</span>
+                        </div>
+                        <div class="field">
+                            <span class="field-label">Deed Book/Page</span>
+                            <span class="field-value">${f(r.sale1_book_page)}</span>
+                        </div>
+                        <div class="field" style="margin-top:8px;">
+                            <span class="field-label">Previous Sale Price</span>
+                            <span class="field-value">${money(r.sale2_price)}</span>
+                        </div>
+                        <div class="field" style="margin-top:8px;">
+                            <span class="field-label">Previous Sale Date</span>
+                            <span class="field-value">${f(r.sale2_date)}</span>
+                        </div>
+                        <div class="field" style="margin-top:8px;">
+                            <span class="field-label">Deed Book/Page</span>
+                            <span class="field-value">${f(r.sale2_book_page)}</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- INFO NOTE -->
+                <div class="note-box">
+                    <strong>Data source:</strong> Florida Dept. of Revenue - Statewide Cadastral (public records, updated annually).<br>
+                    <strong>Not included (not in public property records):</strong> Mortgage details, insurance, tax payment status, email, phone number.
+                    Mortgage info can be found at the County Clerk of Court. Tax payment status at the County Tax Collector.
+                </div>
+                `;
+            }
+        }
+    </script>
+</body>
+</html>
