@@ -3,3 +3,4 @@ python-dotenv
 flask
 gunicorn
 beautifulsoup4
+curl_cffi

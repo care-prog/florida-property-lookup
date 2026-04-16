@@ -222,7 +222,9 @@ def format_property(attrs):
 
 
 def lookup_property(address):
-    """Main lookup: geocode → cadastral → flood zone."""
+    """Main lookup: geocode → cadastral → flood zone → people search → links."""
+    from extra_lookups import search_person, generate_smart_links
+
     geo = geocode_address(address)
     if not geo:
         return {"error": "Address not found. Make sure it's a valid Florida address."}
@@ -237,8 +239,28 @@ def lookup_property(address):
     # Add flood zone data
     flood = query_flood_zone(geo["lat"], geo["lon"])
 
+    # People search for owner (phone/email)
+    person = None
+    smart_links = {}
+    if results:
+        r0 = results[0]
+        owner = r0.get("owner_name", "")
+        city = ""
+        addr = r0.get("address", "")
+        if "," in addr:
+            city = addr.split(",")[-1].strip().split()[0] if addr else ""
+        person = search_person(owner, city, "FL")
+        county_no = None
+        if matched:
+            county_no = matched[0]["attributes"].get("CO_NO")
+        smart_links = generate_smart_links(
+            owner, r0.get("parcel_id"), addr, city, county_no
+        )
+
     return {
         "matched_address": geo["matched_address"],
         "results": results,
         "flood": flood,
+        "person": person,
+        "links": smart_links,
     }
