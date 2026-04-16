@@ -74,13 +74,31 @@ def search_radaris(owner_name, city="", state="FL"):
         if r.status_code != 200:
             return {"first": first, "last": last, "found": False}
 
-        skip = ["example.", "sentry.", "radaris.", "googleapis.", "gstatic.",
-                "google.", "facebook.", "cloudflare.", "jquery.", "bootstrap."]
-        phones = list(set(re.findall(r"\(\d{3}\)\s*\d{3}-\d{4}", r.text)))[:5]
-        raw_emails = re.findall(r"[\w.+-]+@[\w-]+\.[\w.]+", r.text)
-        emails = list(set(e.rstrip(".") for e in raw_emails
-                          if not any(d in e.lower() for d in skip) and len(e) > 5))[:5]
-        age_m = re.search(r"Age\s*(\d+)", r.text)
+        # Parse only VISIBLE text (not JS/CSS) to avoid site code emails/phones
+        from bs4 import BeautifulSoup
+        soup = BeautifulSoup(r.text, "html.parser")
+        for tag in soup(["script", "style", "noscript", "meta", "link", "svg"]):
+            tag.decompose()
+        visible_text = soup.get_text(" ", strip=True)
+
+        # Extract phones from visible text
+        phones = list(set(re.findall(r"\(\d{3}\)\s*\d{3}-\d{4}", visible_text)))[:5]
+
+        # Extract emails from visible span/a/div elements (more precise than full text)
+        skip = ["example.", "radaris.", "googleapis.", "gstatic.", "google.",
+                "facebook.", "cloudflare.", "jquery.", "bootstrap.", "sentry."]
+        emails_set = set()
+        for tag in soup.find_all(["span", "a", "div", "p", "li"]):
+            tag_text = tag.get_text(strip=True)
+            if "@" in tag_text and len(tag_text) < 80:
+                found = re.findall(r"[\w.+-]+@[\w-]+\.[\w.]+", tag_text)
+                for e in found:
+                    e = e.rstrip(".")
+                    if not any(d in e.lower() for d in skip) and len(e) > 5:
+                        emails_set.add(e)
+        emails = list(emails_set)[:5]
+
+        age_m = re.search(r"Age\s*(\d+)", visible_text)
 
         return {
             "first": first, "last": last,
@@ -228,7 +246,7 @@ def generate_smart_links(owner_name, parcel_id, address, city, county_no):
             links["tax_collector"] = f"https://miamidade.county-taxes.com/public/search/property_tax?search_query={folio}"
             links["clerk_records"] = "https://onlineservices.miamidadeclerk.gov/officialrecords/#/s/r"
             links["property_appraiser"] = f"https://www.miamidadepa.gov/propertysearch/#/?folio={folio}"
-        elif cn == "6":  # Broward
+        elif cn in ("6", "16"):  # Broward (FDOR CO_NO=16)
             links["tax_collector"] = f"https://broward.county-taxes.com/public/search/property_tax?search_query={folio}"
             links["property_appraiser"] = "https://web.bcpa.net/BcpaClient/#/Record-Search"
         elif cn == "50":  # Palm Beach
