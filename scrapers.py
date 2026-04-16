@@ -246,10 +246,10 @@ def generate_smart_links(owner_name, parcel_id, address, city, county_no):
     if owner_name and owner_name != "N/A":
         cw = ["LLC", "INC", "CORP", "LTD", "LP", "TRUST"]
         if not any(w in owner_name for w in cw):
-            parts = owner_name.replace(",", " ").split()
-            if len(parts) >= 2:
-                name_slug = "+".join(parts[:2])
+            first, last = _clean_owner_name(owner_name)
+            if first and last:
                 city_state = f"{city}+FL" if city else "FL"
-                links["truepeoplesearch"] = f"https://www.truepeoplesearch.com/results?name={name_slug}&citystatezip={city_state}"
+                links["truepeoplesearch"] = f"https://www.truepeoplesearch.com/results?name={first}+{last}&citystatezip={city_state}"
+                links["radaris"] = f"https://radaris.com/p/{first}/{last}/"
 
     return links

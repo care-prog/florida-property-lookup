@@ -411,6 +411,15 @@
                         </div>` : ''}
                     </div>
                 </div>` : ''}
+                ${data.person && !data.person.found && !data.person.is_company && (data.links.radaris || data.links.truepeoplesearch) ? `
+                <div class="card">
+                    <div class="card-title">Owner Contact Info</div>
+                    <p style="color:#94a3b8;margin-bottom:12px;">Click below to find phone numbers and email addresses for the owner:</p>
+                    <div style="display:flex;flex-wrap:wrap;gap:8px;">
+                        ${data.links.radaris ? '<a href="'+data.links.radaris+'" target="_blank" class="link-btn" style="font-size:1rem;padding:12px 20px;">📞 Find Phone & Email (Radaris)</a>' : ''}
+                        ${data.links.truepeoplesearch ? '<a href="'+data.links.truepeoplesearch+'" target="_blank" class="link-btn" style="font-size:1rem;padding:12px 20px;">📞 Find Phone & Email (TruePeople)</a>' : ''}
+                    </div>
+                </div>` : ''}
                 ${data.person && data.person.is_company ? `
                 <div class="card">
                     <div class="card-title">Owner is a Company/LLC</div>
@@ -434,7 +443,8 @@
                         ${data.links.property_appraiser ? '<a href="'+data.links.property_appraiser+'" target="_blank" class="link-btn">Property Appraiser</a>' : ''}
                         ${data.links.tax_collector ? '<a href="'+data.links.tax_collector+'" target="_blank" class="link-btn">Tax Payment Status</a>' : ''}
                         ${data.links.clerk_records ? '<a href="'+data.links.clerk_records+'" target="_blank" class="link-btn">Mortgage / Liens (Clerk)</a>' : ''}
-                        ${data.links.truepeoplesearch ? '<a href="'+data.links.truepeoplesearch+'" target="_blank" class="link-btn">More Contact Info</a>' : ''}
+                        ${data.links.radaris ? '<a href="'+data.links.radaris+'" target="_blank" class="link-btn">Phone / Email (Radaris)</a>' : ''}
+                        ${data.links.truepeoplesearch ? '<a href="'+data.links.truepeoplesearch+'" target="_blank" class="link-btn">Phone / Email (TruePeople)</a>' : ''}
                     </div>
                 </div>` : ''}
 
