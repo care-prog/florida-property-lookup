@@ -338,6 +338,57 @@
                     </div>
                 </div>` : ''}
 
+                <!-- SUNBIZ LLC/CORP -->
+                ${data.sunbiz && data.sunbiz.found ? `
+                <div class="card">
+                    <div class="card-title">LLC/Corp Details (Sunbiz - FL Dept of State)</div>
+                    <div class="grid">
+                        <div class="field">
+                            <span class="field-label">Entity Name</span>
+                            <span class="field-value highlight">${f(data.sunbiz.name)}</span>
+                        </div>
+                        <div class="field">
+                            <span class="field-label">Status</span>
+                            <span class="field-value ${data.sunbiz.status === 'ACTIVE' ? 'green' : 'red'}">${f(data.sunbiz.status)}</span>
+                        </div>
+                        ${data.sunbiz.ein && data.sunbiz.ein !== 'N/A' ? `
+                        <div class="field">
+                            <span class="field-label">EIN</span>
+                            <span class="field-value">${data.sunbiz.ein}</span>
+                        </div>` : ''}
+                        ${data.sunbiz.date_filed ? `
+                        <div class="field">
+                            <span class="field-label">Date Filed</span>
+                            <span class="field-value">${data.sunbiz.date_filed}</span>
+                        </div>` : ''}
+                        ${data.sunbiz.registered_agent ? `
+                        <div class="field">
+                            <span class="field-label">Registered Agent</span>
+                            <span class="field-value green">${data.sunbiz.registered_agent}</span>
+                        </div>` : ''}
+                        ${data.sunbiz.agent_address ? `
+                        <div class="field">
+                            <span class="field-label">Agent Address</span>
+                            <span class="field-value">${f(data.sunbiz.agent_address)}</span>
+                        </div>` : ''}
+                        ${data.sunbiz.principal_address ? `
+                        <div class="field full-width">
+                            <span class="field-label">Principal Address</span>
+                            <span class="field-value">${data.sunbiz.principal_address}</span>
+                        </div>` : ''}
+                    </div>
+                    ${data.sunbiz.officers && data.sunbiz.officers.length > 0 ? `
+                    <div style="margin-top:16px;padding-top:12px;border-top:1px solid #334155;">
+                        <span class="field-label" style="display:block;margin-bottom:8px;">OFFICERS / DIRECTORS</span>
+                        ${data.sunbiz.officers.map(o => `
+                        <div style="margin-bottom:8px;padding:8px;background:#0f172a;border-radius:6px;">
+                            <span class="green" style="font-weight:600;">${o.name}</span>
+                            <span style="color:#94a3b8;margin-left:8px;">(${o.title})</span>
+                            ${o.address ? '<br><span style="color:#94a3b8;font-size:0.85rem;">' + o.address + '</span>' : ''}
+                        </div>`).join('')}
+                    </div>` : ''}
+                </div>` : ''}
+
                 <!-- PERSON / CONTACT INFO -->
                 ${data.person && data.person.found ? `
                 <div class="card">

@@ -222,8 +222,8 @@ def format_property(attrs):
 
 
 def lookup_property(address):
-    """Main lookup: geocode → cadastral → flood zone → people search → links."""
-    from extra_lookups import search_person, generate_smart_links
+    """Main lookup: geocode → cadastral → flood → people → LLC → links."""
+    from scrapers import search_radaris, search_sunbiz, generate_smart_links
 
     geo = geocode_address(address)
     if not geo:
@@ -235,13 +235,12 @@ def lookup_property(address):
 
     matched = find_best_match(features, address)
     results = [format_property(f["attributes"]) for f in matched]
-
-    # Add flood zone data
     flood = query_flood_zone(geo["lat"], geo["lon"])
 
-    # People search for owner (phone/email)
     person = None
+    sunbiz = None
     smart_links = {}
+
     if results:
         r0 = results[0]
         owner = r0.get("owner_name", "")
@@ -249,10 +248,15 @@ def lookup_property(address):
         addr = r0.get("address", "")
         if "," in addr:
             city = addr.split(",")[-1].strip().split()[0] if addr else ""
-        person = search_person(owner, city, "FL")
-        county_no = None
-        if matched:
-            county_no = matched[0]["attributes"].get("CO_NO")
+
+        # People search (phone/email via Radaris)
+        person = search_radaris(owner, city, "FL")
+
+        # Sunbiz LLC lookup (if owner is a company)
+        sunbiz = search_sunbiz(owner)
+
+        # Smart links
+        county_no = matched[0]["attributes"].get("CO_NO") if matched else None
         smart_links = generate_smart_links(
             owner, r0.get("parcel_id"), addr, city, county_no
         )
@@ -262,5 +266,6 @@ def lookup_property(address):
         "results": results,
         "flood": flood,
         "person": person,
+        "sunbiz": sunbiz,
         "links": smart_links,
     }
