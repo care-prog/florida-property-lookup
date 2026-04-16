@@ -302,11 +302,40 @@
                     </div>
                 </div>
 
+                <!-- FLOOD ZONE -->
+                ${data.flood ? `
+                <div class="card">
+                    <div class="card-title">FEMA Flood Zone</div>
+                    <div class="grid">
+                        <div class="field">
+                            <span class="field-label">Flood Zone</span>
+                            <span class="field-value ${data.flood.in_flood_hazard_area ? 'red' : 'green'}" style="font-size:1.15rem;font-weight:600;">
+                                ${f(data.flood.flood_zone)}
+                            </span>
+                        </div>
+                        <div class="field">
+                            <span class="field-label">Risk Level</span>
+                            <span class="field-value">${f(data.flood.flood_zone_desc)}</span>
+                        </div>
+                        <div class="field">
+                            <span class="field-label">Special Flood Hazard Area</span>
+                            <span class="field-value">
+                                ${data.flood.in_flood_hazard_area === true ? '<span class="tag tag-green" style="background:#7f1d1d;color:#fca5a5;">YES - FLOOD INSURANCE REQUIRED</span>' :
+                                  data.flood.in_flood_hazard_area === false ? '<span class="tag tag-green">NO</span>' : 'N/A'}
+                            </span>
+                        </div>
+                        <div class="field">
+                            <span class="field-label">Base Flood Elevation</span>
+                            <span class="field-value">${data.flood.base_flood_elevation ? data.flood.base_flood_elevation + ' ft' : 'N/A'}</span>
+                        </div>
+                    </div>
+                </div>` : ''}
+
                 <!-- INFO NOTE -->
                 <div class="note-box">
-                    <strong>Data source:</strong> Florida Dept. of Revenue - Statewide Cadastral (public records, updated annually).<br>
-                    <strong>Not included (not in public property records):</strong> Mortgage details, insurance, tax payment status, email, phone number.
-                    Mortgage info can be found at the County Clerk of Court. Tax payment status at the County Tax Collector.
+                    <strong>Data sources:</strong> Florida Dept. of Revenue (Cadastral), FEMA (Flood Zones), US Census (Geocoding).<br>
+                    <strong>All data is from public records and 100% free.</strong><br>
+                    <strong>Not included:</strong> Mortgage details (County Clerk), tax payment status (Tax Collector), insurance, email, phone.
                 </div>
                 `;
             }
