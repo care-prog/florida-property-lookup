@@ -244,10 +244,13 @@ def lookup_property(address):
     if results:
         r0 = results[0]
         owner = r0.get("owner_name", "")
-        city = ""
         addr = r0.get("address", "")
+        # Extract city from "123 MAIN ST, Miami Beach 33149"
+        city = ""
         if "," in addr:
-            city = addr.split(",")[-1].strip().split()[0] if addr else ""
+            after_comma = addr.split(",", 1)[1].strip()
+            # Remove zip code at end
+            city = re.sub(r"\s*\d{5}(-\d{4})?\s*$", "", after_comma).strip()
 
         # People search (phone/email via Radaris)
         person = search_radaris(owner, city, "FL")

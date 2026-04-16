@@ -4,6 +4,8 @@ import os
 
 # ── Radaris People Search (curl_cffi) ──────────────────────────────
 
+import requests as std_requests
+
 try:
     from curl_cffi import requests as cffi_requests
     HAS_CFFI = True
@@ -54,7 +56,21 @@ def search_radaris(owner_name, city="", state="FL"):
 
     try:
         url = f"https://radaris.com/p/{first}/{last}/"
-        r = cffi_requests.get(url, impersonate="chrome120", timeout=10)
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+                          "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+            "Accept-Language": "en-US,en;q=0.9",
+        }
+        # Try curl_cffi first (bypasses Cloudflare), fall back to standard requests
+        r = None
+        if HAS_CFFI:
+            try:
+                r = cffi_requests.get(url, impersonate="chrome120", timeout=10)
+            except Exception:
+                r = None
+        if r is None or r.status_code != 200:
+            r = std_requests.get(url, headers=headers, timeout=10)
         if r.status_code != 200:
             return {"first": first, "last": last, "found": False}
 
@@ -191,8 +207,24 @@ def generate_smart_links(owner_name, parcel_id, address, city, county_no):
 
     if parcel_id and parcel_id != "N/A":
         folio = str(parcel_id).replace("-", "")
-        cn = str(county_no) if county_no else ""
-        if cn == "13":  # Miami-Dade
+        cn = str(int(float(county_no))) if county_no else ""
+        # Also detect county from city name as fallback
+        miami_dade_cities = ["MIAMI", "MIAMI BEACH", "CORAL GABLES", "HIALEAH", "DORAL",
+                             "KEY BISCAYNE", "HOMESTEAD", "AVENTURA", "SUNNY ISLES",
+                             "NORTH MIAMI", "SOUTH MIAMI", "PINECREST", "CUTLER BAY"]
+        broward_cities = ["FORT LAUDERDALE", "HOLLYWOOD", "PEMBROKE PINES", "MIRAMAR",
+                          "CORAL SPRINGS", "DAVIE", "PLANTATION", "SUNRISE", "WESTON"]
+        palm_beach_cities = ["WEST PALM BEACH", "BOCA RATON", "BOYNTON BEACH", "DELRAY BEACH",
+                             "JUPITER", "PALM BEACH GARDENS", "WELLINGTON", "LAKE WORTH"]
+        city_upper = (city or "").upper().strip()
+        if not cn or cn == "0":
+            if any(c in city_upper for c in miami_dade_cities):
+                cn = "13"
+            elif any(c in city_upper for c in broward_cities):
+                cn = "6"
+            elif any(c in city_upper for c in palm_beach_cities):
+                cn = "50"
+        if cn in ("13", "23", "86"):  # Miami-Dade (FDOR CO_NO=23)
             links["tax_collector"] = f"https://miamidade.county-taxes.com/public/search/property_tax?search_query={folio}"
             links["clerk_records"] = "https://onlineservices.miamidadeclerk.gov/officialrecords/#/s/r"
             links["property_appraiser"] = f"https://www.miamidadepa.gov/propertysearch/#/?folio={folio}"
