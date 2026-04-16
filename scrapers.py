@@ -41,28 +41,59 @@ def _clean_owner_name(name):
     return (first, last) if first and last and len(first) > 1 and len(last) > 1 else (None, None)
 
 
-def search_radaris(owner_name, city="", state="FL"):
-    """Search Radaris for phone/email. Returns dict or None."""
-    if not HAS_CFFI:
-        return None
+def _extract_all_names(owner_name):
+    """Extract all person names from owner string. Returns list of (first,last) tuples."""
+    if not owner_name or owner_name == "N/A" or "REFERENCE ONLY" in owner_name:
+        return []
 
-    first, last = _clean_owner_name(owner_name)
-    if not first:
-        is_company = any(w in (owner_name or "").upper().split()
-                         for w in ["LLC", "INC", "CORP", "TRUST", "LTD", "LP"])
-        if is_company:
-            return {"is_company": True, "name": owner_name}
-        return None
+    company_words = ["LLC", "INC", "CORP", "LTD", "LP", "TRUST", "ASSOC",
+                     "BANK", "GROUP", "HOLDINGS", "PROPERTIES", "REALTY",
+                     "INVESTMENT", "MANAGEMENT", "DEVELOPMENT", "PARTNERS",
+                     "ESTATE", "FUND", "VENTURES", "CAPITAL", "ASSETS"]
+    if any(w in owner_name.upper().split() for w in company_words):
+        return []
 
+    names = []
+
+    # Split "PERSIKO, AMALI & DAVID" or "SMITH JOHN &W JANE"
+    clean = owner_name.strip()
+    # Remove JR/SR/TR/ETAL suffixes
+    clean = re.sub(r"\s+(ETAL|TR|JTRS|JR|SR|[IV]+)$", "", clean).strip()
+
+    if "," in clean:
+        # "LAST, FIRST1 & FIRST2" format
+        parts = clean.split(",", 1)
+        last = parts[0].strip().title()
+        rest = parts[1].strip()
+        # Split on & or &W
+        firsts = re.split(r"\s*&W?\s+", rest)
+        for f in firsts:
+            f = f.strip().split()[0].title() if f.strip() else ""
+            if f and len(f) > 1 and len(last) > 1:
+                names.append((f, last))
+    else:
+        # "FIRST LAST &W SPOUSE" format
+        clean2 = re.sub(r"\s*&[WH]\s+.*", "", clean)
+        words = clean2.split()
+        if len(words) >= 2:
+            names.append((words[0].title(), words[-1].title()))
+        # Also try spouse
+        spouse_match = re.search(r"&[WH]?\s+(\w+)", clean)
+        if spouse_match and len(words) >= 2:
+            names.append((spouse_match.group(1).title(), words[-1].title()))
+
+    return [(f, l) for f, l in names if f and l and len(f) > 1 and len(l) > 1]
+
+
+def _scrape_radaris(first, last):
+    """Scrape a single Radaris profile. Returns (phones, emails, age) or None."""
     try:
         url = f"https://radaris.com/p/{first}/{last}/"
         headers = {
             "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
                           "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-            "Accept-Language": "en-US,en;q=0.9",
+            "Accept": "text/html,application/xhtml+xml",
         }
-        # Try curl_cffi first (bypasses Cloudflare), fall back to standard requests
         r = None
         if HAS_CFFI:
             try:
@@ -72,19 +103,16 @@ def search_radaris(owner_name, city="", state="FL"):
         if r is None or r.status_code != 200:
             r = std_requests.get(url, headers=headers, timeout=10)
         if r.status_code != 200:
-            return {"first": first, "last": last, "found": False}
+            return [], [], None
 
-        # Parse only VISIBLE text (not JS/CSS) to avoid site code emails/phones
         from bs4 import BeautifulSoup
         soup = BeautifulSoup(r.text, "html.parser")
         for tag in soup(["script", "style", "noscript", "meta", "link", "svg"]):
             tag.decompose()
         visible_text = soup.get_text(" ", strip=True)
 
-        # Extract phones from visible text
         phones = list(set(re.findall(r"\(\d{3}\)\s*\d{3}-\d{4}", visible_text)))[:5]
 
-        # Extract emails from visible span/a/div elements (more precise than full text)
         skip = ["example.", "radaris.", "googleapis.", "gstatic.", "google.",
                 "facebook.", "cloudflare.", "jquery.", "bootstrap.", "sentry."]
         emails_set = set()
@@ -99,15 +127,49 @@ def search_radaris(owner_name, city="", state="FL"):
         emails = list(emails_set)[:5]
 
         age_m = re.search(r"Age\s*(\d+)", visible_text)
+        age = age_m.group(1) if age_m else None
 
-        return {
-            "first": first, "last": last,
-            "found": bool(phones or emails),
-            "phones": phones, "emails": emails,
-            "age": age_m.group(1) if age_m else None,
-        }
+        return phones, emails, age
     except Exception:
+        return [], [], None
+
+
+def search_radaris(owner_name, city="", state="FL"):
+    """Search Radaris for phone/email. Tries all names from owner string."""
+    if not HAS_CFFI and not std_requests:
+        return None
+
+    names = _extract_all_names(owner_name)
+    if not names:
+        is_company = any(w in (owner_name or "").upper().split()
+                         for w in ["LLC", "INC", "CORP", "TRUST", "LTD", "LP"])
+        if is_company:
+            return {"is_company": True, "name": owner_name}
+        return None
+
+    # Search all names and merge results
+    all_phones = set()
+    all_emails = set()
+    best_age = None
+
+    for first, last in names:
+        phones, emails, age = _scrape_radaris(first, last)
+        all_phones.update(phones)
+        all_emails.update(emails)
+        if age and (best_age is None or int(age) < int(best_age)):
+            best_age = age  # take youngest (more likely the actual owner)
+
+    first, last = names[0]
+    if not all_phones and not all_emails:
         return {"first": first, "last": last, "found": False}
+
+    return {
+        "first": first, "last": last,
+        "found": True,
+        "phones": list(all_phones)[:8],
+        "emails": list(all_emails)[:5],
+        "age": best_age,
+    }
 
 
 # ── Sunbiz LLC/Corp Search (Playwright) ───────────────────────────
